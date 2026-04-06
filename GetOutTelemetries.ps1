@@ -8,6 +8,7 @@ $script:I18n = @{
         By = "By Butti"
         Github = "GitHub: https://github.com/Buttiiii"
         OptApply = "[1] Aplicar optimizacion"
+        OptRevert = "[3] Revertir cambios"
         OptGithub = "[2] Abrir GitHub de Butti"
         OptExit = "[0] Salir"
         OptLang = "[9] Cambiar idioma"
@@ -28,6 +29,8 @@ $script:I18n = @{
         Step7 = "[7/9] Wallpaper Engine..."
         Step8 = "[8/9] Cursor Vision Cursor White..."
         Step9 = "[9/9] Bateria + tareas autoreaplicacion..."
+        RevertStep = "[R] Revirtiendo cambios a valores por defecto..."
+        RevertDone = "Reversion completada. Reinicia para aplicar todo."
         Done = "Listo. Reinicia para consolidar todos los cambios."
     }
     en = @{
@@ -35,6 +38,7 @@ $script:I18n = @{
         By = "By Butti"
         Github = "GitHub: https://github.com/Buttiiii"
         OptApply = "[1] Apply optimization"
+        OptRevert = "[3] Revert changes"
         OptGithub = "[2] Open Butti's GitHub"
         OptExit = "[0] Exit"
         OptLang = "[9] Change language"
@@ -55,6 +59,8 @@ $script:I18n = @{
         Step7 = "[7/9] Wallpaper Engine..."
         Step8 = "[8/9] Vision Cursor White..."
         Step9 = "[9/9] Battery + auto reapply tasks..."
+        RevertStep = "[R] Reverting changes to default values..."
+        RevertDone = "Revert completed. Restart to apply everything."
         Done = "Done. Restart to consolidate all changes."
     }
 }
@@ -125,6 +131,22 @@ function Disable-TaskSafe {
         [Parameter(Mandatory = $true)][string]$TaskName
     )
     Disable-ScheduledTask -TaskPath $Path -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+}
+
+function Enable-TaskSafe {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$TaskName
+    )
+    Enable-ScheduledTask -TaskPath $Path -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+}
+
+function Set-ServiceStartup {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][ValidateSet("Automatic", "Manual", "Disabled")][string]$StartupType
+    )
+    Set-Service -Name $Name -StartupType $StartupType -ErrorAction SilentlyContinue
 }
 
 function Ensure-Admin {
@@ -215,6 +237,79 @@ function Set-StartupTasks {
     Register-ScheduledTask -TaskPath "\OpenCode\" -TaskName "ReaplicarOptimizacion_Logon" -Action $action -Trigger $triggerLogon -Principal $principalLogon -Settings $settings -Force | Out-Null
 }
 
+function Remove-StartupTasks {
+    Unregister-ScheduledTask -TaskPath "\OpenCode\" -TaskName "ReaplicarOptimizacion_Startup" -Confirm:$false -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskPath "\OpenCode\" -TaskName "ReaplicarOptimizacion_Logon" -Confirm:$false -ErrorAction SilentlyContinue
+}
+
+function Revert-Optimizations {
+    Write-Host (T 'RevertStep')
+
+    Remove-StartupTasks
+
+    # Policies and telemetry keys
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry"
+    Remove-RegValue -Path "HKCU:\Software\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" -Name "Disabled"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" -Name "Disabled"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" -Name "TailoredExperiencesWithDiagnosticDataEnabled"
+    Remove-RegValue -Path "HKCU:\Software\Policies\Microsoft\Windows\CloudContent" -Name "DisableTailoredExperiencesWithDiagnosticData"
+
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "EnableActivityFeed"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "PublishUserActivities"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "UploadUserActivities"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\InputPersonalization" -Name "RestrictImplicitTextCollection"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\InputPersonalization" -Name "RestrictImplicitInkCollection"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\InputPersonalization\TrainedDataStore" -Name "HarvestContacts"
+    Remove-RegValue -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" -Name "DisableSearchBoxSuggestions"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "ConnectedSearchUseWeb"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCloudSearch"
+    Remove-RegValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" -Name "GlobalUserDisabled"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Name "DODownloadMode"
+
+    # Restore common visual defaults
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "EnableTransparency" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarAnimations" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackProgs" -Value 1
+
+    # Restore lock screen behavior
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus"
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 1
+
+    # Restore key services
+    Set-ServiceStartup -Name "DiagTrack" -StartupType Automatic
+    Set-ServiceStartup -Name "dmwappushservice" -StartupType Manual
+    Set-ServiceStartup -Name "WerSvc" -StartupType Manual
+    Set-ServiceStartup -Name "SysMain" -StartupType Automatic
+    Set-ServiceStartup -Name "WSearch" -StartupType Automatic
+
+    # Re-enable scheduled tasks
+    Enable-TaskSafe -Path "\Microsoft\Windows\Customer Experience Improvement Program\" -TaskName "Consolidator"
+    Enable-TaskSafe -Path "\Microsoft\Windows\Customer Experience Improvement Program\" -TaskName "UsbCeip"
+    Enable-TaskSafe -Path "\Microsoft\Windows\DiskDiagnostic\" -TaskName "Microsoft-Windows-DiskDiagnosticDataCollector"
+    Enable-TaskSafe -Path "\Microsoft\Windows\Feedback\Siuf\" -TaskName "DmClient"
+    Enable-TaskSafe -Path "\Microsoft\Windows\Feedback\Siuf\" -TaskName "DmClientOnScenarioDownload"
+    Enable-TaskSafe -Path "\Microsoft\Windows\Application Experience\" -TaskName "Microsoft Compatibility Appraiser Exp"
+    Enable-TaskSafe -Path "\Microsoft\Windows\Application Experience\" -TaskName "PcaPatchDbTask"
+
+    # Restore power profile
+    powercfg /setactive SCHEME_BALANCED | Out-Null
+
+    rundll32.exe user32.dll,UpdatePerUserSystemParameters
+    Write-Host (T 'RevertDone') -ForegroundColor Green
+}
+
 function Show-MiniMenu {
     Clear-Host
     Write-Host "=========================================" -ForegroundColor Cyan
@@ -224,6 +319,7 @@ function Show-MiniMenu {
     Write-Host (T 'Github')
     Write-Host ""
     Write-Host (T 'OptApply')
+    Write-Host (T 'OptRevert')
     Write-Host (T 'OptGithub')
     Write-Host (T 'OptExit')
     Write-Host (T 'OptLang')
@@ -247,6 +343,11 @@ while ($true) {
         "9" {
             Select-Language
             continue
+        }
+        "3" {
+            Ensure-Admin
+            Revert-Optimizations
+            exit 0
         }
         "1" {
             Ensure-Admin

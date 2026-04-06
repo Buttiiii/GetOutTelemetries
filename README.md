@@ -18,6 +18,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\alexc\OneDrive\Proyectos\GetO
 
 ### Menu
 - `[1]` Aplicar optimizacion
+- `[3]` Revertir cambios
 - `[2]` Abrir GitHub de Butti
 - `[0]` Salir
 - `[9]` Cambiar idioma
@@ -37,6 +38,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\alexc\OneDrive\Proyectos\GetO
 
 ### Menu
 - `[1]` Apply optimization
+- `[3]` Revert changes
 - `[2]` Open Butti's GitHub
 - `[0]` Exit
 - `[9]` Change language

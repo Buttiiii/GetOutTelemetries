@@ -24,7 +24,7 @@ $script:I18n = @{
         Step2 = "[2/9] Servicios..."
         Step3 = "[3/9] Tareas programadas..."
         Step4 = "[4/9] Visual, tema oscuro y texto nitido..."
-        Step5 = "[5/9] Fondo de bloqueo..."
+        Step5 = "[5/9] Politicas de escritorio..."
         Step6 = "[6/9] Autoarranque (sin tocar OneDrive)..."
         Step7 = "[7/9] Wallpaper Engine..."
         Step8 = "[8/9] Cursor Vision Cursor White..."
@@ -54,7 +54,7 @@ $script:I18n = @{
         Step2 = "[2/9] Services..."
         Step3 = "[3/9] Scheduled tasks..."
         Step4 = "[4/9] Visuals, dark mode and sharp text..."
-        Step5 = "[5/9] Lock screen..."
+        Step5 = "[5/9] Desktop policies..."
         Step6 = "[6/9] Startup cleanup (without touching OneDrive)..."
         Step7 = "[7/9] Wallpaper Engine..."
         Step8 = "[8/9] Vision Cursor White..."
@@ -158,13 +158,7 @@ function Ensure-Admin {
 }
 
 function Set-LockScreen {
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus"
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 1
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 1
+    return
 }
 
 function Set-CursorVisionWhite {
@@ -266,20 +260,14 @@ function Revert-Optimizations {
     Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "EnableTransparency" -Value 1
     Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarAnimations" -Value 1
     Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackProgs" -Value 1
+    Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "MouseWheelRouting" -Value 2
 
-    # Restore lock screen behavior
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl"
-    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus"
+    # Restore desktop policy behavior
     Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktop"
     Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktopChanges"
     Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "ForceActiveDesktopOn"
     Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoComponents"
     Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoAddingComponents"
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 1
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 1
 
     # Restore key services
     Set-ServiceStartup -Name "DiagTrack" -StartupType Automatic
@@ -400,7 +388,7 @@ Disable-TaskSafe -Path "\Microsoft\Windows\Application Experience\" -TaskName "M
 Disable-TaskSafe -Path "\Microsoft\Windows\Application Experience\" -TaskName "PcaPatchDbTask"
 
 Write-Host (T 'Step4')
-Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 0
+Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 1
 Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarAnimations" -Value 0
 Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ListviewAlphaSelect" -Value 1
 Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ListviewShadow" -Value 1
@@ -413,6 +401,7 @@ Set-RegString -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothing" -Value "
 Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingType" -Value 2
 Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingGamma" -Value 1500
 Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingOrientation" -Value 1
+Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "MouseWheelRouting" -Value 2
 
 Write-Host (T 'Step5')
 Set-LockScreen

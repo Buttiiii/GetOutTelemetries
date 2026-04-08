@@ -158,24 +158,13 @@ function Ensure-Admin {
 }
 
 function Set-LockScreen {
-    $lockSource = "C:\Users\$env:USERNAME\AppData\Roaming\Microsoft\Windows\Themes\TranscodedWallpaper"
-    $lockDir = "C:\ProgramData\OpenCode"
-    $lockFile = Join-Path $lockDir "lockscreen.jpg"
-
-    if (Test-Path $lockSource) {
-        New-Item -Path $lockDir -ItemType Directory -Force | Out-Null
-        Copy-Item -Path $lockSource -Destination $lockFile -Force
-
-        Set-RegString -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage" -Value $lockFile
-        Set-RegDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen" -Value 0
-
-        Set-RegString -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath" -Value $lockFile
-        Set-RegString -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl" -Value $lockFile
-        Set-RegDword -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus" -Value 1
-    }
-
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 0
-    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 0
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "LockScreenImage"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreen"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl"
+    Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus"
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 1
+    Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 1
 }
 
 function Set-CursorVisionWhite {
@@ -284,6 +273,11 @@ function Revert-Optimizations {
     Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImagePath"
     Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageUrl"
     Remove-RegValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" -Name "LockScreenImageStatus"
+    Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktop"
+    Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktopChanges"
+    Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "ForceActiveDesktopOn"
+    Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoComponents"
+    Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoAddingComponents"
     Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenEnabled" -Value 1
     Set-RegDword -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "RotatingLockScreenOverlayEnabled" -Value 1
 
@@ -422,6 +416,11 @@ Set-RegDword -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingOrientation
 
 Write-Host (T 'Step5')
 Set-LockScreen
+Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktop"
+Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoActiveDesktopChanges"
+Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "ForceActiveDesktopOn"
+Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoComponents"
+Remove-RegValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" -Name "NoAddingComponents"
 
 Write-Host (T 'Step6')
 $hkcuRun = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"

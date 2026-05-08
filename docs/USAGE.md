@@ -31,3 +31,25 @@ Required files:
 - `link.cur`
 
 If assets are missing, cursor installation is skipped and logged.
+
+## Install
+
+```powershell
+.\GetOutTelemetries.ps1 -Install
+```
+
+Install copies the script and assets to a safe app location. It does not create scheduled tasks by itself.
+
+## Uninstall
+
+```powershell
+.\GetOutTelemetries.ps1 -Uninstall
+```
+
+Uninstall removes GetOutTelemetries scheduled tasks and installed app files. Logs and backups are kept by default.
+
+## Version
+
+```powershell
+.\GetOutTelemetries.ps1 -Version
+```

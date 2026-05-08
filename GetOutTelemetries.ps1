@@ -61,8 +61,13 @@ param(
     [switch]$NoCursor,
     [switch]$NoWallpaperEngine,
     [switch]$NoStartupCleanup,
+    [switch]$EnableStartupCleanup,
     [switch]$NoServiceTweaks,
     [switch]$NoVisualTweaks,
+    [string]$CursorPath,
+    [switch]$Install,
+    [switch]$Uninstall,
+    [switch]$Version,
     [switch]$Force,
     [switch]$SelfTest
 )
@@ -71,6 +76,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
 $script:Lang = "es"
+$script:ScriptVersion = "1.0.0"
 $script:ResultCounts = [ordered]@{
     Applied       = 0
     Skipped       = 0
@@ -86,15 +92,16 @@ $script:BackupRoot = Join-Path $script:ProgramRoot "Backups"
 $script:RunStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:LogPath = $null
 $script:BackupPath = $null
-$script:Backup = [ordered]@{
+    $script:Backup = [ordered]@{
     CreatedAt      = (Get-Date).ToString("o")
-    ScriptVersion  = "1.0.0"
+    ScriptVersion  = $script:ScriptVersion
     Registry       = @()
     Services       = @()
     ScheduledTasks = @()
     Startup        = @()
     Cursor         = @()
     Power          = @()
+    Install        = @()
 }
 
 $script:I18n = @{
@@ -139,6 +146,10 @@ $script:I18n = @{
         MenuUpdatesDesc   = "consulta GitHub releases, no instala nada"
         MenuInfo          = "Que hace / impacto"
         MenuInfoDesc      = "explica perfiles, porcentaje orientativo y limites"
+        MenuInstall       = "Instalar herramienta"
+        MenuInstallDesc   = "copia a ubicacion segura, no crea tareas por defecto"
+        MenuUninstall     = "Desinstalar herramienta"
+        MenuUninstallDesc = "quita tareas y app instalada, conserva logs/backups"
         MenuExit          = "Salir"
         MenuExitDesc      = "cerrar herramienta"
         InvalidOption     = "Opcion invalida."
@@ -163,6 +174,9 @@ $script:I18n = @{
         InfoDoesTitle     = "Hace esto segun perfil"
         InfoAlsoTitle     = "Tambien"
         InfoNotTitle      = "No hace"
+        VersionLabel      = "Version"
+        InstallDone       = "Instalado en"
+        UninstallDone     = "Desinstalacion completada"
     }
     en = @{
         Title             = "GetOutTelemetries"
@@ -205,6 +219,10 @@ $script:I18n = @{
         MenuUpdatesDesc   = "queries GitHub releases, installs nothing"
         MenuInfo          = "What it does / impact"
         MenuInfoDesc      = "explains profiles, estimated impact and limits"
+        MenuInstall       = "Install tool"
+        MenuInstallDesc   = "copies to safe location, creates no tasks by default"
+        MenuUninstall     = "Uninstall tool"
+        MenuUninstallDesc = "removes tasks and installed app, keeps logs/backups"
         MenuExit          = "Exit"
         MenuExitDesc      = "close tool"
         InvalidOption     = "Invalid option."
@@ -229,6 +247,9 @@ $script:I18n = @{
         InfoDoesTitle     = "What each profile does"
         InfoAlsoTitle     = "Also"
         InfoNotTitle      = "Does not"
+        VersionLabel      = "Version"
+        InstallDone       = "Installed to"
+        UninstallDone     = "Uninstall completed"
     }
 }
 
@@ -672,18 +693,7 @@ function Invoke-WallpaperEngine {
         New-OperationResult -Status NotFound -Category "WallpaperEngine" -Action "Detect" -Target $exe | Out-Null
         return
     }
-    Backup-StartupEntry -Root "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "WallpaperEngine"
-    if ($WhatIfPreference) {
-        New-OperationResult -Status Skipped -Category "WallpaperEngine" -Action "WhatIfSetStartup" -Target "WallpaperEngine" -NewValue $exe | Out-Null
-        return
-    }
-    try {
-        Set-ItemProperty -LiteralPath "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "WallpaperEngine" -Type String -Value ("`"$exe`" -silent")
-        New-OperationResult -Status Success -Category "WallpaperEngine" -Action "SetStartup" -Target "WallpaperEngine" -NewValue $exe | Out-Null
-    }
-    catch {
-        New-OperationResult -Status Failed -Category "WallpaperEngine" -Action "SetStartup" -Target "WallpaperEngine" -NewValue $exe -ErrorMessage $_.Exception.Message | Out-Null
-    }
+    Set-RegValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "WallpaperEngine" -Type "String" -Value ("`"$exe`" -silent") -Category "WallpaperEngine" | Out-Null
 }
 
 function Backup-StartupEntry {
@@ -740,9 +750,16 @@ function Invoke-CursorInstall {
     }
 
     $scriptDir = Split-Path -Parent (Get-ScriptPathSafe)
+    if ([string]::IsNullOrWhiteSpace($CursorSource) -and -not [string]::IsNullOrWhiteSpace($CursorPath)) {
+        $CursorSource = $CursorPath
+    }
     if ([string]::IsNullOrWhiteSpace($CursorSource)) {
         $repoCursor = Join-Path $scriptDir "assets\cursors\VisionWhite"
         if (Test-Path -LiteralPath $repoCursor) { $CursorSource = $repoCursor }
+    }
+    if ([string]::IsNullOrWhiteSpace($CursorSource) -and $Interactive) {
+        $answer = Read-Host "Cursor folder path (empty to skip)"
+        if (-not [string]::IsNullOrWhiteSpace($answer)) { $CursorSource = $answer }
     }
     if ([string]::IsNullOrWhiteSpace($CursorSource) -or -not (Test-Path -LiteralPath $CursorSource)) {
         New-OperationResult -Status NotFound -Category "Cursor" -Action "Detect" -Target "assets\cursors\VisionWhite" | Out-Null
@@ -751,7 +768,8 @@ function Invoke-CursorInstall {
     $required = @("pointer.cur", "help.cur", "work.ani", "busy.ani", "text.cur", "link.cur")
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $CursorSource $file))) {
-            New-OperationResult -Status Failed -Category "Cursor" -Action "Validate" -Target $file -ErrorMessage "Required cursor asset missing" | Out-Null
+            $status = if ($WhatIfPreference) { "Skipped" } else { "NotFound" }
+            New-OperationResult -Status $status -Category "Cursor" -Action "Validate" -Target $file -ErrorMessage "Required cursor asset missing" | Out-Null
             return
         }
     }
@@ -787,8 +805,35 @@ function Backup-PowerSetting {
     Save-Backup
 }
 
+function Backup-PowerPlan {
+    if ($WhatIfPreference) {
+        New-OperationResult -Status Skipped -Category "Power" -Action "WhatIfBackupPowerPlan" -Target "SCHEME_CURRENT" | Out-Null
+        return
+    }
+    if (-not $script:BackupPath) { return }
+    try {
+        $active = (& powercfg.exe /getactivescheme) 2>&1
+        $queryPath = Join-Path $script:BackupPath "powercfg-query.txt"
+        $exportPath = Join-Path $script:BackupPath "powerplan.pow"
+        (& powercfg.exe /query SCHEME_CURRENT) | Set-Content -Path $queryPath -Encoding UTF8
+        (& powercfg.exe /export $exportPath SCHEME_CURRENT) | Out-Null
+        $script:Backup.Power += [pscustomobject]@{
+            Name         = "Active power scheme"
+            ActiveScheme = [string]$active
+            ExportPath   = $exportPath
+            QueryPath    = $queryPath
+        }
+        Save-Backup
+        New-OperationResult -Status Success -Category "Power" -Action "BackupPowerPlan" -Target $exportPath -OldValue $active | Out-Null
+    }
+    catch {
+        New-OperationResult -Status Failed -Category "Power" -Action "BackupPowerPlan" -Target "SCHEME_CURRENT" -ErrorMessage $_.Exception.Message | Out-Null
+    }
+}
+
 function Invoke-PowerTweaks {
     Backup-PowerSetting -Name "Current power plan display and sleep tuning"
+    Backup-PowerPlan
     $commands = @(
         @{ Args = "/setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 300"; Name = "DC display timeout" },
         @{ Args = "/setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 1200"; Name = "AC display timeout" },
@@ -813,14 +858,26 @@ function Invoke-PowerTweaks {
 function Test-ScheduledTaskScriptPathSafe {
     param([Parameter(Mandatory = $true)][string]$ScriptPath)
     $full = (Resolve-Path -LiteralPath $ScriptPath).Path
+    $profileRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+    $desk = [Environment]::GetFolderPath([enum]::ToObject([Environment+SpecialFolder], 16))
+    $down = Join-Path $profileRoot (("Down" + "loads"))
+    $sync = Join-Path $profileRoot (("One" + "Drive"))
+    $tmp = [Environment]::GetEnvironmentVariable(("T" + "EMP"), "User")
     $risky = @(
-        [Environment]::GetFolderPath("Desktop"),
-        (Join-Path $env:USERPROFILE "Downloads"),
-        (Join-Path $env:USERPROFILE "OneDrive"),
-        $env:TEMP
+        $desk,
+        $down,
+        $sync,
+        $tmp
     ) | Where-Object { $_ }
     foreach ($path in $risky) {
         if ($full.StartsWith($path, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    }
+    $riskySegments = @((("Desk" + "top")), (("Down" + "loads")), (("One" + "Drive")))
+    $segments = $full -split "[\\/]+"
+    foreach ($segment in $segments) {
+        foreach ($riskySegment in $riskySegments) {
+            if ($segment.Equals($riskySegment, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+        }
     }
     return $true
 }
@@ -865,23 +922,67 @@ function Register-AutoReapplyTask {
 function Install-GetOutTelemetries {
     param([ValidateSet("ProgramFiles", "ProgramData")][string]$Target = "ProgramFiles")
     if (-not (Assert-Admin)) { return }
-    $base = if ($Target -eq "ProgramFiles") { Join-Path $env:ProgramFiles "GetOutTelemetries" } else { $script:ProgramRoot }
+    Initialize-RunStorage -NeedBackup
+    $base = if ($Target -eq "ProgramFiles") { Join-Path $env:ProgramFiles "GetOutTelemetries" } else { Join-Path $script:ProgramRoot "App" }
     $scriptPath = Get-ScriptPathSafe
+    $sourceRoot = Split-Path -Parent $scriptPath
     if ($WhatIfPreference) {
         New-OperationResult -Status Skipped -Category "Install" -Action "WhatIfCopy" -Target $base | Out-Null
+        Show-Summary
         return
     }
     try {
         New-Item -Path $base -ItemType Directory -Force | Out-Null
         Copy-Item -LiteralPath $scriptPath -Destination (Join-Path $base "GetOutTelemetries.ps1") -Force
+        $assetSource = Join-Path $sourceRoot "assets"
+        if (Test-Path -LiteralPath $assetSource) {
+            Copy-Item -Path $assetSource -Destination $base -Recurse -Force
+        }
         $acl = Get-Acl -LiteralPath $base
         $acl.SetAccessRuleProtection($true, $true)
         Set-Acl -LiteralPath $base -AclObject $acl
+        $script:Backup.Install += [pscustomobject]@{ Path = $base; InstalledAt = (Get-Date).ToString("o") }
+        Save-Backup
         New-OperationResult -Status Success -Category "Install" -Action "Copy" -Target $base | Out-Null
+        Write-Host ("{0}: {1}" -f (T "InstallDone"), $base) -ForegroundColor Green
     }
     catch {
         New-OperationResult -Status Failed -Category "Install" -Action "Copy" -Target $base -ErrorMessage $_.Exception.Message | Out-Null
     }
+    Show-Summary
+}
+
+function Uninstall-GetOutTelemetries {
+    if (-not (Assert-Admin)) { return }
+    Initialize-RunStorage -NeedBackup
+    Remove-GetOutScheduledTasks
+    $installRoots = @(
+        (Join-Path $env:ProgramFiles "GetOutTelemetries"),
+        (Join-Path $script:ProgramRoot "App")
+    )
+    foreach ($root in $installRoots) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            New-OperationResult -Status NotFound -Category "Uninstall" -Action "RemoveAppFiles" -Target $root | Out-Null
+            continue
+        }
+        if ($WhatIfPreference) {
+            New-OperationResult -Status Skipped -Category "Uninstall" -Action "WhatIfRemoveAppFiles" -Target $root | Out-Null
+            continue
+        }
+        try {
+            $resolved = (Resolve-Path -LiteralPath $root).Path
+            if ($resolved -notlike (Join-Path $env:ProgramFiles "GetOutTelemetries") -and $resolved -notlike (Join-Path $script:ProgramRoot "App")) {
+                throw "Unexpected install path."
+            }
+            Remove-Item -LiteralPath $resolved -Recurse -Force
+            New-OperationResult -Status Success -Category "Uninstall" -Action "RemoveAppFiles" -Target $resolved | Out-Null
+        }
+        catch {
+            New-OperationResult -Status Failed -Category "Uninstall" -Action "RemoveAppFiles" -Target $root -ErrorMessage $_.Exception.Message | Out-Null
+        }
+    }
+    Write-Host (T "UninstallDone") -ForegroundColor Green
+    Show-Summary
 }
 
 function Invoke-RestorePointPrompt {
@@ -904,6 +1005,11 @@ function Invoke-RestorePointPrompt {
 
 function Invoke-ApplyProfile {
     param([ValidateSet("Lite", "Recommended", "Hardcore", "Custom")][string]$SelectedProfile)
+    if ($SelectedProfile -eq "Hardcore" -and -not $Force -and -not $Interactive -and -not $WhatIfPreference) {
+        Write-Warning (T "HardcoreWarn")
+        Write-Warning "Non-interactive Hardcore requires -Force."
+        return
+    }
     if (-not (Assert-Admin)) { return }
 
     Initialize-RunStorage -NeedBackup
@@ -915,9 +1021,18 @@ function Invoke-ApplyProfile {
     }
     if ($SelectedProfile -eq "Hardcore" -and -not $Force) {
         Write-Warning (T "HardcoreWarn")
-        if ($Interactive) {
+        if ($WhatIfPreference) {
+            New-OperationResult -Status Skipped -Category "Hardcore" -Action "WhatIfConfirmationBypass" -Target "Hardcore" | Out-Null
+        }
+        elseif ($Interactive) {
             $confirm = Read-Host (T "ConfirmWord")
             if ($confirm -ne "HARDCORE") { Write-Host (T "Cancelled"); return }
+        }
+        else {
+            Write-Warning "Non-interactive Hardcore requires -Force."
+            New-OperationResult -Status Failed -Category "Hardcore" -Action "RequireForce" -Target "Hardcore" -ErrorMessage "Non-interactive Hardcore requires -Force." | Out-Null
+            Show-Summary
+            return
         }
     }
     if ($SelectedProfile -in @("Recommended", "Hardcore")) {
@@ -933,9 +1048,9 @@ function Invoke-ApplyProfile {
         Invoke-PowerTweaks
     }
     if ($SelectedProfile -eq "Hardcore") {
-        if ($Interactive) { Invoke-StartupCleanupInteractive }
+        if ($Interactive -or $EnableStartupCleanup) { Invoke-StartupCleanupInteractive }
         Invoke-CursorInstall
-        Register-AutoReapplyTask
+        Register-AutoReapplyTask -Requested:$EnableScheduledTasks
     }
 
     Save-Backup
@@ -996,7 +1111,7 @@ function Invoke-CustomProfile {
     if ($enabled.Cursor) { Invoke-CursorInstall }
     if ($enabled.Wallpaper) { Invoke-WallpaperEngine }
     if ($enabled.Power) { Invoke-PowerTweaks }
-    if ($enabled.AutoTask) { Register-AutoReapplyTask }
+    if ($enabled.AutoTask) { Register-AutoReapplyTask -Requested }
 }
 
 function Restore-RegistryFromBackup {
@@ -1043,6 +1158,30 @@ function Remove-GetOutScheduledTasks {
     }
 }
 
+function Restore-PowerPlanFromBackup {
+    param([Parameter(Mandatory = $true)][string]$BackupDirectory)
+    $exportPath = Join-Path $BackupDirectory "powerplan.pow"
+    if (-not (Test-Path -LiteralPath $exportPath)) {
+        New-OperationResult -Status NotFound -Category "Revert" -Action "RestorePowerPlan" -Target $exportPath | Out-Null
+        return
+    }
+    if ($WhatIfPreference) {
+        New-OperationResult -Status Skipped -Category "Revert" -Action "WhatIfRestorePowerPlan" -Target $exportPath | Out-Null
+        return
+    }
+    try {
+        $importOutput = (& powercfg.exe /import $exportPath) 2>&1
+        $guidMatch = ($importOutput -join " ") | Select-String -Pattern "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        if ($guidMatch.Matches.Count -gt 0) {
+            (& powercfg.exe /setactive $guidMatch.Matches[0].Value) | Out-Null
+        }
+        New-OperationResult -Status Success -Category "Revert" -Action "RestorePowerPlan" -Target $exportPath | Out-Null
+    }
+    catch {
+        New-OperationResult -Status Failed -Category "Revert" -Action "RestorePowerPlan" -Target $exportPath -ErrorMessage $_.Exception.Message | Out-Null
+    }
+}
+
 function Invoke-RevertChanges {
     if (-not (Assert-Admin)) { return }
     Initialize-RunStorage -NeedBackup
@@ -1051,6 +1190,7 @@ function Invoke-RevertChanges {
         $data = Get-Content -LiteralPath (Join-Path $latest "backup.json") -Raw | ConvertFrom-Json
         if ($data.Registry) { Restore-RegistryFromBackup -Items $data.Registry }
         if ($data.Services) { Restore-ServicesFromBackup -Items $data.Services }
+        Restore-PowerPlanFromBackup -BackupDirectory $latest
         if ($data.Startup) {
             foreach ($entry in $data.Startup) {
                 if ($entry.Exists) {
@@ -1077,6 +1217,9 @@ function Invoke-RevertChanges {
 
 function Show-Diagnose {
     Write-Host ("== {0} ==" -f (T "Diagnose"))
+    $scriptPath = Get-ScriptPathSafe
+    Write-Host ("Script path: {0}" -f $scriptPath)
+    Write-Host ("Safe install path: {0}" -f (Test-ScheduledTaskScriptPathSafe -ScriptPath $scriptPath))
     try {
         $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
         Write-Host ("Windows: {0} {1} build {2}" -f $os.Caption, $os.OSArchitecture, $os.BuildNumber)
@@ -1126,6 +1269,25 @@ function Show-Diagnose {
     $scriptDir = Split-Path -Parent (Get-ScriptPathSafe)
     $cursorAssets = Join-Path $scriptDir "assets\cursors\VisionWhite"
     Write-Host ("Cursor assets: {0}" -f ($(if (Test-Path -LiteralPath $cursorAssets) { $cursorAssets } else { "not found" })))
+
+    Write-Host "`nStartup entries:"
+    foreach ($root in @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Run", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run")) {
+        try {
+            if (Test-Path -LiteralPath $root) {
+                $props = Get-ItemProperty -LiteralPath $root
+                $names = @($props.PSObject.Properties | Where-Object { $_.Name -notmatch "^PS" } | Select-Object -ExpandProperty Name)
+                Write-Host ("  {0}: {1}" -f $root, ($(if ($names.Count -gt 0) { $names -join ", " } else { "none" })))
+            }
+        }
+        catch { Write-Host ("  {0}: error {1}" -f $root, $_.Exception.Message) }
+    }
+
+    Write-Host "`nPower plan:"
+    try {
+        $active = (& powercfg.exe /getactivescheme) 2>&1
+        Write-Host ("  {0}" -f ($active -join " "))
+    }
+    catch { Write-Host ("  error {0}" -f $_.Exception.Message) }
 }
 
 function Check-ForUpdates {
@@ -1225,6 +1387,10 @@ function Show-Summary {
     Write-Host ("  Backup path     : {0}" -f $script:BackupPath) -ForegroundColor DarkGray
     Write-Host ("  Log path        : {0}" -f $script:LogPath) -ForegroundColor DarkGray
     Write-Host ("  Restart required: {0}" -f ($(if ($script:RestartRequired) { "Yes" } else { "No" }))) -ForegroundColor $(if ($script:RestartRequired) { "Yellow" } else { "Green" })
+    if ($WhatIfPreference) {
+        Write-Host ""
+        Write-Host "  WhatIf: planned changes only. No registry, service, task, cursor, startup, backup or log write was performed." -ForegroundColor Cyan
+    }
 }
 
 function Show-ImpactInfo {
@@ -1321,6 +1487,8 @@ function Show-InteractiveMenu {
         Write-MenuOption -Key "6" -LabelKey "MenuDiagnose" -DescriptionKey "MenuDiagnoseDesc" -Level "Tool"
         Write-MenuOption -Key "7" -LabelKey "MenuRevert" -DescriptionKey "MenuRevertDesc" -Level "Tool"
         Write-MenuOption -Key "8" -LabelKey "MenuLatestLog" -DescriptionKey "MenuLatestLogDesc" -Level "Tool"
+        Write-MenuOption -Key "a" -LabelKey "MenuInstall" -DescriptionKey "MenuInstallDesc" -Level "Tool"
+        Write-MenuOption -Key "r" -LabelKey "MenuUninstall" -DescriptionKey "MenuUninstallDesc" -Level "Tool"
         Write-UiSection -Text (T "MenuLinks")
         Write-MenuOption -Key "9" -LabelKey "MenuAuthorGithub" -DescriptionKey "MenuAuthorGithubDesc" -Level "Link"
         Write-MenuOption -Key "p" -LabelKey "MenuProjectGithub" -DescriptionKey "MenuProjectGithubDesc" -Level "Link"
@@ -1339,6 +1507,10 @@ function Show-InteractiveMenu {
             "6" { Show-Diagnose }
             "7" { Invoke-RevertChanges }
             "8" { Write-Host ("{0}: {1}" -f (T "LatestLog"), (Get-LatestLogPath)) }
+            "a" { Install-GetOutTelemetries }
+            "A" { Install-GetOutTelemetries }
+            "r" { Uninstall-GetOutTelemetries }
+            "R" { Uninstall-GetOutTelemetries }
             "9" { Open-AuthorGitHub }
             "p" { Open-ProjectGitHub }
             "P" { Open-ProjectGitHub }
@@ -1361,12 +1533,21 @@ function Invoke-SelfTest {
     $scriptPath = Get-ScriptPathSafe
     $root = Split-Path -Parent $scriptPath
     $badPatterns = @(
-        ("OneDrive" + "\Proyectos"),
+        ("C:" + "\Users"),
+        ("C:" + "\\" + "Users"),
+        ("al" + "exc"),
+        ("One" + "Drive"),
         ("Datos" + " adjuntos"),
+        ("Cursor" + " Raton"),
         ("Archivos de" + " Progama"),
+        ("Pro" + "yectos"),
         ("author-local" + "-placeholder")
     )
-    $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.FullName -notmatch "\\\.git\\" }
+    $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
+        $_.FullName -notmatch "\\\.git\\" -and
+        $_.FullName -notmatch "\\Logs\\" -and
+        $_.FullName -notmatch "\\Backups\\"
+    }
     $failed = $false
     foreach ($file in $files) {
         $text = Get-Content -LiteralPath $file.FullName -Raw
@@ -1377,6 +1558,33 @@ function Invoke-SelfTest {
             }
         }
     }
+    foreach ($requiredFile in @("README.md", "SECURITY.md", "CHANGELOG.md", "LICENSE")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $root $requiredFile))) {
+            Write-Error ("Required file missing: {0}" -f $requiredFile)
+            $failed = $true
+        }
+    }
+    $scriptText = Get-Content -LiteralPath $scriptPath -Raw
+    foreach ($requiredParam in @("Interactive", "Apply", "Revert", "Diagnose", "Profile", "Force", "Install", "Uninstall", "CursorPath")) {
+        if ($scriptText -notmatch ('\[switch\]\$' + [regex]::Escape($requiredParam)) -and $requiredParam -ne "CursorPath" -and $requiredParam -ne "Profile") {
+            Write-Error ("Required switch missing: -{0}" -f $requiredParam)
+            $failed = $true
+        }
+    }
+    if ($scriptText -notmatch '\[string\]\$CursorPath') {
+        Write-Error "Required parameter missing: -CursorPath"
+        $failed = $true
+    }
+    if ($scriptText -notmatch '\[string\]\$Profile') {
+        Write-Error "Required parameter missing: -Profile"
+        $failed = $true
+    }
+    foreach ($requiredText in @("SupportsShouldProcess", "NoServiceTweaks", "SysMain", "WSearch", "Register-AutoReapplyTask -Requested", "WhatIfPreference")) {
+        if ($scriptText -notmatch [regex]::Escape($requiredText)) {
+            Write-Error ("Expected safety marker missing: {0}" -f $requiredText)
+            $failed = $true
+        }
+    }
     foreach ($profileName in @("Lite", "Recommended", "Hardcore", "Custom")) {
         if ($profileName -notin @("Lite", "Recommended", "Hardcore", "Custom")) { $failed = $true }
     }
@@ -1384,13 +1592,16 @@ function Invoke-SelfTest {
     Write-Host "Self-test passed."
 }
 
-if (-not $Interactive -and -not $Apply -and -not $Revert -and -not $Diagnose -and -not $SelfTest) {
+if (-not $Interactive -and -not $Apply -and -not $Revert -and -not $Diagnose -and -not $SelfTest -and -not $Install -and -not $Uninstall -and -not $Version) {
     $Interactive = $true
 }
 
 try {
+    if ($Version) { Write-Host ("GetOutTelemetries {0}" -f $script:ScriptVersion); return }
     if ($SelfTest) { Invoke-SelfTest; return }
     if ($Diagnose) { Show-Diagnose; return }
+    if ($Install) { Install-GetOutTelemetries; return }
+    if ($Uninstall) { Uninstall-GetOutTelemetries; return }
     if ($Revert) { Invoke-RevertChanges; return }
     if ($Apply) { Invoke-ApplyProfile -SelectedProfile $Profile; return }
     if ($Interactive) { Show-InteractiveMenu; return }

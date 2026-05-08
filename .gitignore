@@ -1,0 +1,15 @@
+Logs/
+Backups/
+*.log
+*.tmp
+*.zip
+*.bak
+*.old
+TestResults/
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo

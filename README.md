@@ -47,6 +47,9 @@ Ejemplos no interactivos:
 .\GetOutTelemetries.ps1 -Apply -Profile Recommended
 .\GetOutTelemetries.ps1 -Apply -Profile Hardcore
 .\GetOutTelemetries.ps1 -Revert
+.\GetOutTelemetries.ps1 -Install
+.\GetOutTelemetries.ps1 -Uninstall
+.\GetOutTelemetries.ps1 -Version
 ```
 
 Vista previa sin cambios:
@@ -177,11 +180,16 @@ El menu usa secciones, colores y etiquetas de riesgo:
 | `-Profile Lite\|Recommended\|Hardcore\|Custom` | Selecciona perfil. |
 | `-NoScheduledTasks` | Bloquea tareas programadas. |
 | `-EnableScheduledTasks` | Permite tarea programada opt-in con reglas seguras. |
+| `-EnableStartupCleanup` | Permite limpieza de inicio en ejecucion no interactiva cuando aplica. |
 | `-NoCursor` | Omite cursor. |
+| `-CursorPath <ruta>` | Usa una carpeta de cursores proporcionada por el usuario. |
 | `-NoWallpaperEngine` | Omite Wallpaper Engine. |
 | `-NoStartupCleanup` | Omite limpieza de inicio. |
 | `-NoServiceTweaks` | Omite servicios. |
 | `-NoVisualTweaks` | Omite tema/visual. |
+| `-Install` | Instala la herramienta en ubicacion segura. |
+| `-Uninstall` | Quita tareas y app instalada; conserva logs/backups. |
+| `-Version` | Muestra version. |
 | `-WhatIf` | Simula sin cambiar sistema. |
 | `-Verbose` | Muestra operaciones detalladas. |
 | `-Force` | Reduce prompts no criticos, sin saltar checks de seguridad. |
@@ -228,6 +236,40 @@ Reporta bugs con:
 - Comando usado.
 - Log mas reciente.
 - Backup mas reciente si afecta revert.
+
+### Instalacion y desinstalacion
+
+```powershell
+.\GetOutTelemetries.ps1 -Install
+.\GetOutTelemetries.ps1 -Uninstall
+```
+
+`-Install` copia el script y assets a una ubicacion segura. No crea tareas programadas salvo que el usuario lo pida explicitamente.
+
+`-Uninstall` elimina tareas `GetOutTelemetries` y archivos instalados. Logs y backups se conservan por defecto.
+
+### Cursores
+
+Los cursores son opcionales. Coloca assets propios o con licencia en:
+
+```text
+assets\cursors\VisionWhite\
+```
+
+Tambien puedes usar:
+
+```powershell
+.\GetOutTelemetries.ps1 -Apply -Profile Hardcore -CursorPath ".\assets\cursors\VisionWhite" -Force
+```
+
+Si los assets faltan, se omiten de forma segura y queda registrado.
+
+### CI y releases
+
+El repositorio incluye:
+
+- `.github/workflows/ci.yml`: parse PowerShell, PSScriptAnalyzer, self-test, archivos requeridos y strings prohibidas.
+- `.github/workflows/release.yml`: empaqueta zip en tags `v*`.
 
 ### Limitaciones conocidas
 
@@ -286,6 +328,9 @@ Non-interactive examples:
 .\GetOutTelemetries.ps1 -Apply -Profile Recommended
 .\GetOutTelemetries.ps1 -Apply -Profile Hardcore
 .\GetOutTelemetries.ps1 -Revert
+.\GetOutTelemetries.ps1 -Install
+.\GetOutTelemetries.ps1 -Uninstall
+.\GetOutTelemetries.ps1 -Version
 ```
 
 Dry run:
@@ -416,11 +461,16 @@ The menu uses sections, colors and risk labels:
 | `-Profile Lite\|Recommended\|Hardcore\|Custom` | Selects profile. |
 | `-NoScheduledTasks` | Blocks scheduled tasks. |
 | `-EnableScheduledTasks` | Allows opt-in scheduled task using safe rules. |
+| `-EnableStartupCleanup` | Allows startup cleanup in non-interactive runs when applicable. |
 | `-NoCursor` | Skips cursor. |
+| `-CursorPath <path>` | Uses a user-provided cursor folder. |
 | `-NoWallpaperEngine` | Skips Wallpaper Engine. |
 | `-NoStartupCleanup` | Skips startup cleanup. |
 | `-NoServiceTweaks` | Skips service changes. |
 | `-NoVisualTweaks` | Skips visual/theme changes. |
+| `-Install` | Installs the tool to a safe location. |
+| `-Uninstall` | Removes tasks and installed app; keeps logs/backups. |
+| `-Version` | Prints version. |
 | `-WhatIf` | Simulates without changing system state. |
 | `-Verbose` | Shows detailed operations. |
 | `-Force` | Reduces non-critical prompts without bypassing safety checks. |
@@ -467,6 +517,40 @@ Report bugs with:
 - Command used.
 - Latest log.
 - Latest backup if revert is affected.
+
+### Install and uninstall
+
+```powershell
+.\GetOutTelemetries.ps1 -Install
+.\GetOutTelemetries.ps1 -Uninstall
+```
+
+`-Install` copies the script and assets to a safe location. It does not create scheduled tasks unless explicitly requested.
+
+`-Uninstall` removes `GetOutTelemetries` tasks and installed files. Logs and backups are kept by default.
+
+### Cursor assets
+
+Cursors are optional. Place owned or properly licensed assets in:
+
+```text
+assets\cursors\VisionWhite\
+```
+
+You can also use:
+
+```powershell
+.\GetOutTelemetries.ps1 -Apply -Profile Hardcore -CursorPath ".\assets\cursors\VisionWhite" -Force
+```
+
+If assets are missing, cursor setup is skipped safely and logged.
+
+### CI and releases
+
+The repository includes:
+
+- `.github/workflows/ci.yml`: PowerShell parse, PSScriptAnalyzer, self-test, required files and forbidden strings.
+- `.github/workflows/release.yml`: builds a zip package for `v*` tags.
 
 ### Known limitations
 

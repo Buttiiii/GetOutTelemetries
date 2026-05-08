@@ -23,6 +23,16 @@ Create a Windows restore point before aggressive changes. The tool also creates 
 - No SYSTEM scheduled task pointing to user-writable scripts.
 - No storage of sensitive personal data.
 
+## Install and scheduled task safety
+
+Use `-Install` before enabling auto-reapply scheduled tasks. Scheduled tasks are opt-in only, use the `\GetOutTelemetries\` task path, and run as the current user with highest privileges rather than SYSTEM.
+
+The tool refuses risky user-writable script locations for auto-reapply tasks. If this check fails, install to a protected location first.
+
+## Cursor assets
+
+Cursor assets are optional and are not bundled unless they are owned or properly licensed. Place assets under `assets\cursors\VisionWhite\` or pass `-CursorPath`.
+
 ## Logs and backups
 
 - Logs: `C:\ProgramData\GetOutTelemetries\Logs\`

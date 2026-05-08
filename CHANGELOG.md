@@ -14,3 +14,9 @@
 - Added self-test validation mode.
 - Added bilingual README, MIT license and security policy.
 - Added fully localized interactive menu with short descriptions, author GitHub link and guided "Apply all" option.
+- Added portable cursor support with `-CursorPath` and assets placeholder.
+- Added `-Install`, `-Uninstall`, `-Version` and `-EnableStartupCleanup`.
+- Added stronger Hardcore safety for non-interactive runs.
+- Added improved power plan backup/export and restore attempt.
+- Added CI and release packaging workflows.
+- Added `.gitignore` and expanded docs.

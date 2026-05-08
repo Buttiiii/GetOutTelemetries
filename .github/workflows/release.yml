@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build zip
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $name = "GetOutTelemetries-$version"
+          New-Item -ItemType Directory -Path $name | Out-Null
+          Copy-Item GetOutTelemetries.ps1,README.md,SECURITY.md,CHANGELOG.md,LICENSE -Destination $name
+          if (Test-Path docs) { Copy-Item docs -Destination $name -Recurse }
+          if (Test-Path assets) { Copy-Item assets -Destination $name -Recurse }
+          Compress-Archive -Path $name -DestinationPath "$name.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GetOutTelemetries-release
+          path: GetOutTelemetries-v*.zip
